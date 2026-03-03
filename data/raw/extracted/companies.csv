@@ -1,0 +1,18 @@
+company_id,company_name,hq_country,company_type,public_private,notes_v1_scope,last_updated_date
+google,Alphabet (Google/DeepMind),United States,cloud_provider,public,Hyperscaler; publishes data center energy and emissions disclosures.,2026-02-28
+microsoft,Microsoft (Azure/OpenAI partnership),United States,cloud_provider,public,Hyperscaler; broad sustainability reporting; major AI infrastructure provider.,2026-02-28
+amazon,Amazon (AWS),United States,cloud_provider,public,Hyperscaler; major cloud compute footprint; sustainability reporting varies by boundary.,2026-02-28
+meta,Meta,United States,integrated_ai_company,public,Large-scale AI training footprint; data center disclosures available.,2026-02-28
+oracle,Oracle,United States,cloud_provider,public,Cloud + enterprise; disclosures may be less granular; useful benchmark.,2026-02-28
+ibm,IBM,United States,integrated_ai_company,public,Enterprise AI + cloud services; established ESG reporting.,2026-02-28
+salesforce,Salesforce,United States,integrated_ai_company,public,AI-enabled SaaS; reporting often includes Scope 2 and renewable procurement.,2026-02-28
+openai,OpenAI,United States,model_developer,private,Model developer; infrastructure largely via partners; disclosure may be limited.,2026-02-28
+anthropic,Anthropic,United States,model_developer,private,Model developer; infrastructure via cloud partners; disclosure may be limited.,2026-02-28
+xai,xAI,United States,model_developer,private,Model developer; infrastructure disclosures may be limited; include with lower confidence expectation.,2026-02-28
+mistral,Mistral AI,France,model_developer,private,Model developer; European context; disclosures may be limited early.,2026-02-28
+cohere,Cohere,Canada,model_developer,private,Model developer; enterprise focus; infrastructure via partners.,2026-02-28
+stabilityai,Stability AI,United Kingdom,model_developer,private,Model developer; disclosures may be limited.,2026-02-28
+nvidia,NVIDIA,United States,hardware_enabler,public,GPU supplier; operational footprint + supply chain; include as enabling layer.,2026-02-28
+amd,AMD,United States,hardware_enabler,public,GPU/CPU supplier; operational footprint + supply chain; include as enabling layer.,2026-02-28
+apple,Apple,United States,hardware_platform,public,Added for AISRI scoring (manual ingest),2026-03-02
+tencent,Tencent,China,integrated_ai_company,public,Added for AISRI scoring (manual ingest),2026-03-02

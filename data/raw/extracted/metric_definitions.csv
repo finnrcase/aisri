@@ -1,0 +1,9 @@
+metric_id,metric_name,pillar,preferred_unit,directionality,accepted_boundaries,hierarchy_rule,scoring_method,notes
+renewable_share_pct,Renewable electricity share,energy,percent,higher_is_better,data_center|compute|company,prefer_dc_then_compute_then_company,observed,Percent of electricity from renewable or carbon-free sources
+pue,Power Usage Effectiveness,efficiency,ratio,lower_is_better,data_center,dc_only_preferred,observed,Reported data center PUE
+scope2_intensity,Scope 2 emissions intensity,carbon,tCO2e_per_MWh,lower_is_better,compute|company,prefer_compute_then_company,observed_or_derived,Scope 2 emissions divided by electricity consumption
+offset_share_scope2,Offsets as percent of Scope 2,offsets,percent,lower_is_better,company,company_only,observed,Percent of Scope 2 emissions covered by offsets
+reports_scope2_market_and_location,Reports market and location Scope 2,transparency,binary,higher_is_better,company,company_only,observed,Whether both market and location-based Scope 2 are disclosed
+reports_electricity_consumption,Reports electricity consumption,transparency,binary,higher_is_better,company,company_only,observed,Whether electricity consumption is disclosed
+reports_data_center_metrics,Reports data center-specific metrics,transparency,binary,higher_is_better,data_center,dc_only_preferred,observed,Whether DC-specific metrics like PUE are reported
+third_party_assurance_level,Third party assurance level,transparency,ordinal,higher_is_better,company,company_only,observed,0=none 1=limited 2=reasonable assurance

@@ -1,0 +1,5 @@
+﻿source_id,company_id,source_type,title,publisher,publish_date,url,accessed_date,archive_url,citation_text
+microsoft_2024_sust_01,microsoft,sustainability_report,Microsoft Sustainability Report 2024,Microsoft,2024-01-01,REPLACE_URL,2026-02-28,-,Microsoft (2024) Sustainability Report.
+google_2024_env_01,google,sustainability_report,Alphabet Environmental Report 2024,Alphabet,2024-01-01,REPLACE_URL,2026-02-28,-,Alphabet (2024) Environmental Report.
+amazon_2024_sust_01,amazon,sustainability_report,Amazon Sustainability Report 2024,Amazon,2024-01-01,REPLACE_URL,2026-02-28,-,Amazon (2024) Sustainability Report.
+meta_2024_sust_01,meta,sustainability_report,Meta Sustainability Report 2024,Meta,2024-01-01,REPLACE_URL,2026-02-28,-,Meta (2024) Sustainability Report.
