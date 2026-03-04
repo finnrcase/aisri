@@ -16,3 +16,7 @@ nvidia,NVIDIA,United States,hardware_enabler,public,GPU supplier; operational fo
 amd,AMD,United States,hardware_enabler,public,GPU/CPU supplier; operational footprint + supply chain; include as enabling layer.,2026-02-28
 apple,Apple,United States,hardware_platform,public,Added for AISRI scoring (manual ingest),2026-03-02
 tencent,Tencent,China,integrated_ai_company,public,Added for AISRI scoring (manual ingest),2026-03-02
+alibaba,Alibaba Group,China,cloud_provider,public,Added for AISRI scoring (manual ingest),2026-03-03
+equinix,Equinix,United States,data_center_operator,public,Data center / colocation operator added for AISRI scoring (manual ingest),2026-03-03
+intel,Intel,United States,hardware_enabler,public,Added for AISRI scoring (manual ingest),2026-03-03
+tsmc,Taiwan Semiconductor Manufacturing Company,semiconductors,taiwan,,,
