@@ -719,7 +719,7 @@ def render_executive_dashboard() -> None:
                     "company_name",
                     "current_total_electricity_mwh",
                     "current_renewable_share_pct",
-                    "target_clean_share_pct",
+                    "target_clean_energy_share_pct",
                     "target_year",
                     "projected_demand_growth_multiplier",
                     "demand_basis",
