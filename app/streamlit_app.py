@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 from typing import Optional
 
 import numpy as np
@@ -9,14 +10,17 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from src.market_demand import (
     DEFAULT_TARGET_YEAR,
     NET_ZERO_PROXY_TARGET_SHARE_PCT,
     SCENARIO_MULTIPLIERS,
     build_market_demand_table,
 )
-
-ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
 OUTPUT_DIR = ROOT / "outputs" / "dashboard_exports"
 
