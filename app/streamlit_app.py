@@ -14,13 +14,24 @@ import streamlit as st
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+SRC_DIR = ROOT / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 
-from src.market_demand import (
-    DEFAULT_TARGET_YEAR,
-    NET_ZERO_PROXY_TARGET_SHARE_PCT,
-    SCENARIO_MULTIPLIERS,
-    build_market_demand_table,
-)
+try:
+    from src.market_demand import (
+        DEFAULT_TARGET_YEAR,
+        NET_ZERO_PROXY_TARGET_SHARE_PCT,
+        SCENARIO_MULTIPLIERS,
+        build_market_demand_table,
+    )
+except ModuleNotFoundError:
+    from market_demand import (
+        DEFAULT_TARGET_YEAR,
+        NET_ZERO_PROXY_TARGET_SHARE_PCT,
+        SCENARIO_MULTIPLIERS,
+        build_market_demand_table,
+    )
 DATA_DIR = ROOT / "data"
 OUTPUT_DIR = ROOT / "outputs" / "dashboard_exports"
 
@@ -429,7 +440,7 @@ def build_growth_disclosure_scatter(demand_df: pd.DataFrame) -> go.Figure:
         color="demand_basis",
         size="projected_total_electricity_mwh",
         hover_name="company_name",
-        hover_data={"target_clean_share_pct": True, "target_year": True},
+        hover_data={"target_clean_energy_share_pct": True, "target_year": True},
         color_discrete_map={"disclosed": ACCENT, "inferred_from_note": "#B9C6D4", "not_disclosed": "#64748B"},
     )
     fig.update_layout(height=360, title="Demand Growth vs. Procurement Gap Signal")
