@@ -9,6 +9,12 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+from src.market_demand import (
+    DEFAULT_TARGET_YEAR,
+    NET_ZERO_PROXY_TARGET_SHARE_PCT,
+    SCENARIO_MULTIPLIERS,
+    build_market_demand_table,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
@@ -33,6 +39,7 @@ ACCENT = "#8FA7C6"
 ACCENT_ALT = "#5B708C"
 GRID = "rgba(255,255,255,0.10)"
 TEXT = "#E8EEF5"
+
 
 st.set_page_config(
     page_title="AISRI | Sustainability Risk Dashboard",
@@ -352,6 +359,123 @@ def build_history_chart(scores_df: pd.DataFrame, chosen: str) -> Optional[go.Fig
     return style_plotly(fig)
 
 
+def build_gap_ranking_chart(demand_df: pd.DataFrame) -> go.Figure:
+    frame = demand_df.dropna(subset=["clean_energy_gap_mwh"]).copy()
+    frame["clean_energy_gap_twh"] = frame["clean_energy_gap_mwh"] / 1_000_000.0
+    frame = frame.nlargest(10, "clean_energy_gap_twh").sort_values("clean_energy_gap_twh", ascending=True)
+    fig = px.bar(
+        frame,
+        x="clean_energy_gap_twh",
+        y="company_name",
+        orientation="h",
+        text="clean_energy_gap_twh",
+        color_discrete_sequence=[ACCENT],
+    )
+    fig.update_traces(texttemplate="%{text:.2f} TWh", textposition="outside", hovertemplate="%{y}: %{x:.2f} TWh<extra></extra>")
+    fig.update_layout(height=420, title="Largest Modeled Clean Power Procurement Gaps")
+    return style_plotly(fig)
+
+
+def build_energy_mix_chart(demand_df: pd.DataFrame) -> go.Figure:
+    frame = demand_df.dropna(subset=["current_total_electricity_mwh"]).copy()
+    frame["current_total_electricity_twh"] = frame["current_total_electricity_mwh"] / 1_000_000.0
+    frame["current_clean_energy_twh"] = frame["current_clean_energy_mwh"] / 1_000_000.0
+    frame["projected_total_electricity_twh"] = frame["projected_total_electricity_mwh"] / 1_000_000.0
+    frame["projected_required_clean_energy_twh"] = frame["projected_required_clean_energy_mwh"] / 1_000_000.0
+    frame = frame[["company_name", "current_clean_energy_twh", "current_total_electricity_twh", "projected_required_clean_energy_twh", "projected_total_electricity_twh"]].copy()
+    frame["Current non-clean"] = (frame["current_total_electricity_twh"] - frame["current_clean_energy_twh"]).clip(lower=0)
+    frame["Projected non-clean remainder"] = (frame["projected_total_electricity_twh"] - frame["projected_required_clean_energy_twh"]).clip(lower=0)
+    plot_records = []
+    for _, row in frame.iterrows():
+        plot_records.extend(
+            [
+                {"company_name": row["company_name"], "Series": "Current clean", "TWh": row["current_clean_energy_twh"]},
+                {"company_name": row["company_name"], "Series": "Current non-clean", "TWh": row["Current non-clean"]},
+                {"company_name": row["company_name"], "Series": "Projected clean need", "TWh": row["projected_required_clean_energy_twh"]},
+                {"company_name": row["company_name"], "Series": "Projected remaining mix", "TWh": row["Projected non-clean remainder"]},
+            ]
+        )
+    plot_frame = pd.DataFrame(plot_records)
+    fig = px.bar(
+        plot_frame,
+        x="company_name",
+        y="TWh",
+        color="Series",
+        barmode="stack",
+        color_discrete_map={
+            "Current clean": ACCENT,
+            "Current non-clean": "#546273",
+            "Projected clean need": "#A8C0D8",
+            "Projected remaining mix": "#39485A",
+        },
+    )
+    fig.update_layout(height=420, title="Current Position vs. Modeled Future Clean Power Need")
+    fig.update_xaxes(tickangle=-35)
+    return style_plotly(fig)
+
+
+def build_growth_disclosure_scatter(demand_df: pd.DataFrame) -> go.Figure:
+    frame = demand_df.dropna(subset=["projected_demand_growth_multiplier"]).copy()
+    frame["clean_energy_gap_twh"] = frame["clean_energy_gap_mwh"] / 1_000_000.0
+    frame = frame.dropna(subset=["clean_energy_gap_twh"])
+    fig = px.scatter(
+        frame,
+        x="projected_demand_growth_multiplier",
+        y="clean_energy_gap_twh",
+        color="demand_basis",
+        size="projected_total_electricity_mwh",
+        hover_name="company_name",
+        hover_data={"target_clean_share_pct": True, "target_year": True},
+        color_discrete_map={"disclosed": ACCENT, "inferred_from_note": "#B9C6D4", "not_disclosed": "#64748B"},
+    )
+    fig.update_layout(height=360, title="Demand Growth vs. Procurement Gap Signal")
+    fig.update_xaxes(title="Demand growth multiplier")
+    return style_plotly(fig)
+
+
+def build_market_headlines(demand_df: pd.DataFrame) -> list[str]:
+    headlines: list[str] = []
+    if demand_df.empty:
+        return ["No modeled market-demand signals are available for the current selection."]
+
+    modeled = demand_df.dropna(subset=["clean_energy_gap_mwh"]).copy()
+    if not modeled.empty:
+        largest_gap = modeled.iloc[0]
+        headlines.append(
+            f"{largest_gap['company_name']} shows the largest modeled clean energy procurement gap in the current scenario."
+        )
+
+    weak_disclosure = demand_df[
+        (demand_df["demand_basis"] == "not_disclosed")
+        & (demand_df["projected_total_electricity_mwh"].isna())
+    ]
+    if not weak_disclosure.empty:
+        names = ", ".join(weak_disclosure["company_name"].head(3).tolist())
+        headlines.append(
+            f"{names} stand out as potentially relevant demand cases where electricity-use disclosure is still too limited for a defensible estimate."
+        )
+
+    high_demand = demand_df[
+        demand_df["opportunity_classification"].isin(
+            ["Potential high-demand infrastructure customer", "Large clean energy procurement need"]
+        )
+    ]
+    if not high_demand.empty:
+        names = ", ".join(high_demand["company_name"].head(3).tolist())
+        headlines.append(
+            f"{names} currently read as the strongest infrastructure partnership signals on a comparative basis."
+        )
+
+    lower_priority = demand_df[demand_df["opportunity_classification"] == "Lower near-term signal"]
+    if not lower_priority.empty:
+        names = ", ".join(lower_priority["company_name"].head(3).tolist())
+        headlines.append(
+            f"{names} appear lower priority for near-term infrastructure outreach because the modeled gap is smaller or the signal is less differentiated."
+        )
+
+    return headlines[:4]
+
+
 def rankings_export_frame(scores_df: pd.DataFrame) -> pd.DataFrame:
     frame = scores_df.copy()
     columns = [
@@ -416,8 +540,8 @@ st.markdown(
       <div class="eyebrow">AI Infrastructure Sustainability Analytics</div>
       <div class="hero-title">AISRI Dashboard</div>
       <p class="hero-copy">
-        A recruiter-facing and decision-support view of disclosed sustainability risk across AI infrastructure companies.
-        The dashboard emphasizes comparative signals, confidence, pillar-level drivers, and exportable outputs rather than raw worksheet-style tables.
+        A decision-support dashboard for evaluating disclosed sustainability risk across AI infrastructure companies.
+        Explore company positioning, confidence, pillar-level performance, and supporting evidence in a structured executive view.
       </p>
     </div>
     """,
@@ -442,6 +566,7 @@ st.sidebar.markdown("### Dashboard Controls")
 available_years = sorted(scores["fiscal_year"].dropna().unique().tolist()) if "fiscal_year" in scores.columns else [2024]
 year = st.sidebar.selectbox("Fiscal year", available_years, index=len(available_years) - 1)
 view = st.sidebar.radio("View", ["Executive Dashboard", "Company Profile", "Methodology", "Data Sources"], index=0)
+scenario_name = st.sidebar.selectbox("Demand scenario", list(SCENARIO_MULTIPLIERS.keys()), index=0)
 search = st.sidebar.text_input("Search company", value="").strip().lower()
 
 scores_y = scores.copy()
@@ -458,12 +583,13 @@ if "overall_risk" in scores_y.columns:
 else:
     scores_y = scores_y.sort_values(["confidence_score"], ascending=[False], na_position="last").reset_index(drop=True)
 scores_y["rank"] = np.arange(1, len(scores_y) + 1)
+demand_model_y = build_market_demand_table(scores_y, metrics, scenario_name)
 
 
 def render_executive_dashboard() -> None:
     make_section_header(
         "Summary and Market View",
-        "Start with a cross-company view of the current year, then drill into company-level drivers and exports.",
+        "Compare company positioning for the selected year, then review the metrics, drivers, and supporting evidence behind each profile.",
     )
 
     total_companies = len(scores_y)
@@ -523,6 +649,98 @@ def render_executive_dashboard() -> None:
     st.dataframe(ranking_table, use_container_width=True, hide_index=True)
     export_controls(ranking_table, "rankings", f"aisri_rankings_{year}.csv")
 
+    make_section_header(
+        "Market Demand & Infrastructure Signals",
+        "A market-intelligence layer that estimates where future clean power procurement and infrastructure relevance may be strongest based on disclosed electricity use, renewable position, and transparent scenario assumptions.",
+    )
+    if demand_model_y.empty:
+        st.info("No modeled demand data is available for the current selection.")
+    else:
+        top_gap = demand_model_y.iloc[0]
+        modeled = demand_model_y.dropna(subset=["projected_total_electricity_mwh"]).copy()
+        total_projected_twh = modeled["projected_total_electricity_mwh"].sum() / 1_000_000.0 if not modeled.empty else 0.0
+        total_required_clean_twh = modeled["projected_required_clean_energy_mwh"].sum() / 1_000_000.0 if not modeled.empty else 0.0
+        total_gap_twh = modeled["clean_energy_gap_mwh"].sum() / 1_000_000.0 if not modeled.empty else 0.0
+        high_signal_count = int(
+            demand_model_y["opportunity_classification"].isin(
+                ["Potential high-demand infrastructure customer", "Large clean energy procurement need"]
+            ).sum()
+        )
+
+        s1, s2, s3, s4 = st.columns(4)
+        with s1:
+            make_metric_card("Projected electricity", f"{total_projected_twh:.2f} TWh", "Across companies with modeled demand")
+        with s2:
+            make_metric_card("Required clean energy", f"{total_required_clean_twh:.2f} TWh", f"Scenario: {scenario_name}")
+        with s3:
+            make_metric_card("Modeled clean energy gap", f"{total_gap_twh:.2f} TWh", "Incremental clean procurement need")
+        with s4:
+            make_metric_card("High-signal companies", str(high_signal_count), "Comparative infrastructure opportunity signals")
+
+        st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+        left_col, right_col = st.columns([1.6, 1.0], gap="large")
+        with left_col:
+            st.plotly_chart(build_gap_ranking_chart(demand_model_y), use_container_width=True)
+        with right_col:
+            st.markdown('<div class="panel">', unsafe_allow_html=True)
+            st.markdown("#### Headline market takeaways")
+            largest_gap_twh = top_gap["clean_energy_gap_mwh"] / 1_000_000.0 if not pd.isna(top_gap["clean_energy_gap_mwh"]) else np.nan
+            headlines = build_market_headlines(demand_model_y)
+            st.markdown('<ul class="insight-list">' + "".join(f"<li>{item}</li>" for item in headlines) + "</ul>", unsafe_allow_html=True)
+            st.caption(
+                f"Modeled planning view only. The selected scenario applies a {SCENARIO_MULTIPLIERS[scenario_name]:.2f}x demand multiplier through {DEFAULT_TARGET_YEAR}. "
+                f"Largest current modeled gap: {largest_gap_twh:.2f} TWh."
+            )
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        mix_tab, scatter_tab, assumptions_tab = st.tabs(["Energy Mix", "Growth vs Gap", "Assumptions"])
+        with mix_tab:
+            st.plotly_chart(build_energy_mix_chart(demand_model_y.head(8)), use_container_width=True)
+        with scatter_tab:
+            st.plotly_chart(build_growth_disclosure_scatter(demand_model_y), use_container_width=True)
+        with assumptions_tab:
+            assumption_table = demand_model_y[
+                [
+                    "company_name",
+                    "current_total_electricity_mwh",
+                    "current_renewable_share_pct",
+                    "target_clean_share_pct",
+                    "target_year",
+                    "projected_demand_growth_multiplier",
+                    "demand_basis",
+                    "target_basis",
+                    "opportunity_classification",
+                ]
+            ].copy()
+            assumption_table.columns = [
+                "Company",
+                "Current Electricity (MWh)",
+                "Current Clean Share (%)",
+                "Target Clean Share (%)",
+                "Target Year",
+                "Demand Growth Multiplier",
+                "Demand Basis",
+                "Target Basis",
+                "Opportunity Signal",
+            ]
+            assumption_table["Demand Growth Multiplier"] = assumption_table["Demand Growth Multiplier"].map(lambda x: f"{x:.2f}x")
+            st.dataframe(assumption_table, use_container_width=True, hide_index=True)
+            export_controls(demand_model_y, "market demand model", f"aisri_market_demand_{year}.csv")
+
+        with st.expander("Assumptions and methodology note", expanded=False):
+            st.markdown(
+                f"""
+                - Scenario selected: **{scenario_name}** using a **{SCENARIO_MULTIPLIERS[scenario_name]:.2f}x** demand multiplier through **{DEFAULT_TARGET_YEAR}**.
+                - Current clean energy is modeled as `current_total_electricity_mwh * current_renewable_share_pct`.
+                - If electricity use is not clearly disclosed, the app leaves projected demand and clean energy gap fields blank rather than inventing a baseline.
+                - If an explicit clean-energy target is not found, the model uses a transparent default target assumption.
+                - If only net-zero language is found, the model uses a proxy clean-energy target of **{NET_ZERO_PROXY_TARGET_SHARE_PCT:.0f}%** by **{DEFAULT_TARGET_YEAR}**.
+                """
+            )
+
+        with st.expander("Underlying modeled table", expanded=False):
+            st.dataframe(demand_model_y, use_container_width=True, hide_index=True)
+
 
 def render_company_profile() -> None:
     options = scores_y.sort_values("company_name")["company_id"].astype(str).unique().tolist()
@@ -539,6 +757,7 @@ def render_company_profile() -> None:
     company_metrics["company_id"] = company_metrics["company_id"].astype(str)
     pillar_df = build_pillar_frame(row)
     insights = build_key_insights(row, company_metrics)
+    demand_row = demand_model_y[demand_model_y["company_id"] == chosen].head(1)
 
     make_section_header(
         f"{company_name} | Company Profile",
@@ -597,6 +816,83 @@ def render_company_profile() -> None:
     if history_fig is not None:
         make_section_header("Trend", "Historical context is shown when more than one fiscal year is available.")
         st.plotly_chart(history_fig, use_container_width=True)
+
+    make_section_header(
+        "Market Demand & Infrastructure Signals",
+        "This market-research layer highlights where modeled clean power demand, infrastructure relevance, and disclosure quality may create stronger or weaker partnership signals.",
+    )
+    if demand_row.empty:
+        st.info("No modeled market-demand estimate is available for this company.")
+    else:
+        d = demand_row.iloc[0]
+        d1, d2, d3, d4 = st.columns(4)
+        with d1:
+            current_total_text = f"{d['current_total_electricity_mwh'] / 1_000_000.0:.2f} TWh" if not pd.isna(d["current_total_electricity_mwh"]) else "Unavailable"
+            make_metric_card("Current electricity", current_total_text, d["demand_basis"].replace("_", " ").title())
+        with d2:
+            projected_total_text = f"{d['projected_total_electricity_mwh'] / 1_000_000.0:.2f} TWh" if not pd.isna(d["projected_total_electricity_mwh"]) else "Unavailable"
+            make_metric_card("Projected demand", projected_total_text, f"Through {int(d['target_year'])}")
+        with d3:
+            current_clean_text = f"{d['current_clean_energy_mwh'] / 1_000_000.0:.2f} TWh" if not pd.isna(d["current_clean_energy_mwh"]) else "Unavailable"
+            renewable_share_text = f"{d['current_renewable_share_pct']:.0f}% current share" if not pd.isna(d["current_renewable_share_pct"]) else "Renewable share unavailable"
+            make_metric_card("Current clean energy", current_clean_text, renewable_share_text)
+        with d4:
+            gap_text = f"{d['clean_energy_gap_mwh'] / 1_000_000.0:.2f} TWh" if not pd.isna(d["clean_energy_gap_mwh"]) else "Unavailable"
+            make_metric_card("Opportunity signal", d["opportunity_classification"], gap_text)
+
+        demand_chart_col, demand_note_col = st.columns([1.5, 1.0], gap="large")
+        with demand_chart_col:
+            if pd.isna(d["current_total_electricity_mwh"]):
+                st.info("Current electricity use is not clearly disclosed, so the projected energy mix is not modeled for this company.")
+            else:
+                mix_df = pd.DataFrame(
+                    {
+                        "Stage": ["Current clean", "Current non-clean", "Projected clean need", "Projected remaining mix"],
+                        "TWh": [
+                            d["current_clean_energy_mwh"] / 1_000_000.0 if not pd.isna(d["current_clean_energy_mwh"]) else 0.0,
+                            max((d["current_total_electricity_mwh"] - d["current_clean_energy_mwh"]) / 1_000_000.0, 0.0) if not pd.isna(d["current_clean_energy_mwh"]) else 0.0,
+                            d["projected_required_clean_energy_mwh"] / 1_000_000.0 if not pd.isna(d["projected_required_clean_energy_mwh"]) else 0.0,
+                            max((d["projected_total_electricity_mwh"] - d["projected_required_clean_energy_mwh"]) / 1_000_000.0, 0.0) if not pd.isna(d["projected_required_clean_energy_mwh"]) else 0.0,
+                        ],
+                    }
+                )
+                fig = px.bar(
+                    mix_df,
+                    x="Stage",
+                    y="TWh",
+                    text="TWh",
+                    color="Stage",
+                    color_discrete_map={
+                        "Current clean": ACCENT,
+                        "Current non-clean": "#546273",
+                        "Projected clean need": "#A8C0D8",
+                        "Projected remaining mix": "#39485A",
+                    },
+                )
+                fig.update_traces(texttemplate="%{text:.2f}", textposition="outside")
+                fig.update_layout(height=360, title="Current vs. Projected Energy Mix")
+                st.plotly_chart(style_plotly(fig), use_container_width=True)
+        with demand_note_col:
+            st.markdown('<div class="panel">', unsafe_allow_html=True)
+            st.markdown("#### Business development interpretation")
+            st.write(d["market_narrative"])
+            st.write(
+                f"Modeled target: {d['target_clean_energy_share_pct']:.0f}% clean energy by {int(d['target_year'])}. "
+                f"Scenario multiplier: {d['projected_demand_growth_multiplier']:.2f}x."
+            )
+            st.caption(d["assumption_note"])
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        with st.expander("Demand model assumptions for this company", expanded=False):
+            st.markdown(
+                f"""
+                - Scenario: **{d['scenario']}**
+                - Demand basis: **{d['demand_basis'].replace('_', ' ')}**
+                - Target basis: **{str(d['target_basis']).replace('_', ' ')}**
+                - If current electricity use is unavailable, the model does not fabricate a forecast.
+                - Net-zero-only disclosures are proxied to **{NET_ZERO_PROXY_TARGET_SHARE_PCT:.0f}%** clean energy by **{DEFAULT_TARGET_YEAR}**.
+                """
+            )
 
     make_section_header("Export", "Download or save the curated outputs used in this view.")
     profile_export = rankings_export_frame(company_row)
